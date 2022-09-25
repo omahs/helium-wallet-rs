@@ -284,17 +284,16 @@ pub enum TokenInput {
 // We use decimal for all numbers because the helium-api-rs serializes and deserializes tokens as
 // u64s (ie: bones).
 enum Amount {
-    Dec(Decimal),
+    Dec(Token),
     Max,
 }
 
 impl Amount {
     pub fn token_amount(&self) -> Token {
-        let d: Decimal = match self {
+        match self {
             Amount::Dec(raw) => *raw,
-            _ => Decimal::from(0),
-        };
-        Token::new(d.round_dp(8))
+            _ => Token::new(Decimal::from(0)),
+        }
     }
 }
 
@@ -303,18 +302,17 @@ impl<'de> Deserialize<'de> for Amount {
     where
         D: Deserializer<'de>,
     {
-        if let Ok(raw) = Value::deserialize(deserializer) {
-            //if let Some(d) = value_to_decimal(raw.clone()) {
-            println!("KBKB raw {}", raw);
-            if let Some(d) = raw.as_f64().and_then(Decimal::from_f64_retain) {
-                return Ok(Amount::Dec(d));
-            } else if let Some(s) = raw.as_str() {
-                return Amount::from_str(s).map_err(|e| deError::custom(e.to_string()));
-            }
+        // use the JSON deserialize so as to accept strings or nums
+        let v = Value::deserialize(deserializer)?;
+        match v {
+            Value::Number(num) => Ok(Amount::Dec(
+                Token::from_str(&num.to_string()).map_err(D::Error::custom)?,
+            )),
+            Value::String(str) => Amount::from_str(&str).map_err(D::Error::custom),
+            _ => Err(D::Error::custom(
+                "Invalid amount. Amount must be a number or \"max\"",
+            )),
         }
-        Err(deError::custom(
-            "Invalid amount. Amount must be a number or \"max\"",
-        ))
     }
 }
 
@@ -322,7 +320,7 @@ impl FromStr for Amount {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        if let Ok(raw) = Decimal::from_str(s) {
+        if let Ok(raw) = Token::from_str(s) {
             Ok(Amount::Dec(raw))
         } else if s.eq("max") {
             Ok(Amount::Max)
