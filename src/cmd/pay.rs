@@ -284,14 +284,14 @@ pub enum TokenInput {
 // We use decimal for all numbers because the helium-api-rs serializes and deserializes tokens as
 // u64s (ie: bones).
 enum Amount {
-    Dec(Token),
+    Token(Token),
     Max,
 }
 
 impl Amount {
     pub fn token_amount(&self) -> Token {
         match self {
-            Amount::Dec(raw) => *raw,
+            Amount::Token(raw) => *raw,
             _ => Token::new(Decimal::from(0)),
         }
     }
@@ -305,7 +305,7 @@ impl<'de> Deserialize<'de> for Amount {
         // use the JSON deserialize so as to accept strings or nums
         let v = Value::deserialize(deserializer)?;
         match v {
-            Value::Number(num) => Ok(Amount::Dec(
+            Value::Number(num) => Ok(Amount::Token(
                 Token::from_str(&num.to_string()).map_err(D::Error::custom)?,
             )),
             Value::String(str) => Amount::from_str(&str).map_err(D::Error::custom),
@@ -321,7 +321,7 @@ impl FromStr for Amount {
 
     fn from_str(s: &str) -> Result<Self> {
         if let Ok(raw) = Token::from_str(s) {
-            Ok(Amount::Dec(raw))
+            Ok(Amount::Token(raw))
         } else if s.eq("max") {
             Ok(Amount::Max)
         } else {
